@@ -16,17 +16,18 @@ jobs:
   build:
     name: Build upstream Android baseline
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - name: Check out project
         uses: actions/checkout@v4
 
-      - name: Fetch pinned Telegram Android source and submodules
-        timeout-minutes: 60
+      - name: Fetch pinned Telegram Android source and diagnose submodules
+        timeout-minutes: 270
         env:
           GIT_TERMINAL_PROMPT: "0"
           GIT_HTTP_LOW_SPEED_LIMIT: "1000"
           GIT_HTTP_LOW_SPEED_TIME: "60"
+        shell: bash
         run: |
           set -Eeuo pipefail
 
@@ -38,35 +39,55 @@ jobs:
           git -C telegram-source checkout --detach 3de37c8cfb039452be7398909461da6288babf15
           git -C telegram-source submodule sync --recursive
 
-          # Avoid opening too many simultaneous GitHub connections on hosted runners.
           git config --global http.version HTTP/1.1
           git config --global http.lowSpeedLimit 1000
           git config --global http.lowSpeedTime 60
 
-          for attempt in 1 2 3; do
-            echo "::group::Submodule download attempt ${attempt}/3"
-            echo "Started at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            if timeout --signal=TERM --kill-after=60s 15m \
-              git -C telegram-source -c protocol.version=2 -c submodule.fetchJobs=2 \
-              submodule update --init --recursive --depth 1 --jobs 2; then
-              echo "All submodules fetched successfully."
-              git -C telegram-source submodule status --recursive
-              echo "::endgroup::"
-              exit 0
+          mapfile -t SUBMODULE_PATHS < <(git -C telegram-source config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+          echo "Found ${#SUBMODULE_PATHS[@]} top-level submodules."
+
+          for index in "${!SUBMODULE_PATHS[@]}"; do
+            path="${SUBMODULE_PATHS[$index]}"
+            number=$((index + 1))
+            echo "::group::Submodule ${number}/${#SUBMODULE_PATHS[@]}: ${path}"
+            echo "Started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git -C telegram-source config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk -v p="$path" '$2 == p {print "Configured path: " $2}'
+            git -C telegram-source submodule status -- "$path" || true
+
+            if timeout --signal=TERM --kill-after=30s 8m \
+              git -C telegram-source -c protocol.version=2 \
+              submodule update --init --recursive --depth 1 --jobs 1 -- "$path"; then
+              echo "First attempt succeeded: ${path}"
             else
               result=$?
+              echo "First attempt failed for ${path}, exit code: ${result}"
+              echo "Retrying this exact submodule once..."
+              if timeout --signal=TERM --kill-after=30s 5m \
+                git -C telegram-source -c protocol.version=2 \
+                submodule update --init --recursive --depth 1 --jobs 1 -- "$path"; then
+                echo "Retry succeeded: ${path}"
+              else
+                retry_result=$?
+                echo "::error title=Submodule fetch failed::${path} failed twice (exit codes ${result}, ${retry_result})"
+                echo "Submodule status:"
+                git -C telegram-source submodule status --recursive || true
+                echo "Submodule configuration:"
+                git -C telegram-source config -f .gitmodules --get-regexp '^submodule\..*\.(path|url)$' || true
+                echo "Git remotes for failed path:"
+                git -C "telegram-source/${path}" remote -v 2>/dev/null || true
+                echo "Failed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                echo "::endgroup::"
+                exit 1
+              fi
             fi
-            echo "Submodule attempt ${attempt} failed (exit ${result})."
-            git -C telegram-source submodule status --recursive || true
-            echo "Finished at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+            echo "Finished: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            git -C telegram-source submodule status -- "$path" || true
             echo "::endgroup::"
-            if [ "${attempt}" -lt 3 ]; then
-              sleep 15
-            fi
           done
 
-          echo "Submodule fetching failed after 3 attempts."
-          exit 1
+          echo "All top-level and recursive submodules fetched successfully."
+          git -C telegram-source submodule status --recursive
 
       - name: Build using upstream Docker environment
         run: |
