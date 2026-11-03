@@ -25,15 +25,30 @@ jobs:
         timeout-minutes: 60
         env:
           GIT_TERMINAL_PROMPT: "0"
+          GIT_HTTP_LOW_SPEED_LIMIT: "1000"
+          GIT_HTTP_LOW_SPEED_TIME: "60"
         run: |
-          git clone --no-checkout --depth 1 https://github.com/TelegramOrg/Telegram-Android.git telegram-source
-          git -C telegram-source fetch --depth 1 origin 3de37c8cfb039452be7398909461da6288babf15
+          set -Eeuo pipefail
+
+          echo "Fetching pinned Telegram Android source..."
+          timeout --signal=TERM --kill-after=60s 10m \
+            git clone --no-checkout --depth 1 https://github.com/TelegramOrg/Telegram-Android.git telegram-source
+          timeout --signal=TERM --kill-after=60s 10m \
+            git -C telegram-source fetch --depth 1 origin 3de37c8cfb039452be7398909461da6288babf15
           git -C telegram-source checkout --detach 3de37c8cfb039452be7398909461da6288babf15
           git -C telegram-source submodule sync --recursive
 
+          # Avoid opening too many simultaneous GitHub connections on hosted runners.
+          git config --global http.version HTTP/1.1
+          git config --global http.lowSpeedLimit 1000
+          git config --global http.lowSpeedTime 60
+
           for attempt in 1 2 3; do
             echo "::group::Submodule download attempt ${attempt}/3"
-            if timeout 45m git -C telegram-source -c submodule.fetchJobs=8 submodule update --init --recursive --depth 1 --jobs 8; then
+            echo "Started at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if timeout --signal=TERM --kill-after=60s 15m \
+              git -C telegram-source -c protocol.version=2 -c submodule.fetchJobs=2 \
+              submodule update --init --recursive --depth 1 --jobs 2; then
               echo "All submodules fetched successfully."
               git -C telegram-source submodule status --recursive
               echo "::endgroup::"
@@ -43,11 +58,13 @@ jobs:
             fi
             echo "Submodule attempt ${attempt} failed (exit ${result})."
             git -C telegram-source submodule status --recursive || true
+            echo "Finished at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "::endgroup::"
             if [ "${attempt}" -lt 3 ]; then
               sleep 15
             fi
           done
+
           echo "Submodule fetching failed after 3 attempts."
           exit 1
 
