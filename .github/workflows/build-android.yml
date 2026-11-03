@@ -23,9 +23,10 @@ jobs:
 
       - name: Fetch pinned Telegram Android source and submodules
         run: |
-          git clone --recursive --depth 1 https://github.com/TelegramOrg/Telegram-Android.git telegram-source
+          git clone --no-checkout --depth 1 https://github.com/TelegramOrg/Telegram-Android.git telegram-source
           git -C telegram-source fetch --depth 1 origin 3de37c8cfb039452be7398909461da6288babf15
           git -C telegram-source checkout --detach 3de37c8cfb039452be7398909461da6288babf15
+          git -C telegram-source submodule sync --recursive
           git -C telegram-source submodule update --init --recursive --depth 1
 
       - name: Build using upstream Docker environment
