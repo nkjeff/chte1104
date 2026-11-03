@@ -22,12 +22,33 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Fetch pinned Telegram Android source and submodules
+        timeout-minutes: 60
+        env:
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           git clone --no-checkout --depth 1 https://github.com/TelegramOrg/Telegram-Android.git telegram-source
           git -C telegram-source fetch --depth 1 origin 3de37c8cfb039452be7398909461da6288babf15
           git -C telegram-source checkout --detach 3de37c8cfb039452be7398909461da6288babf15
           git -C telegram-source submodule sync --recursive
-          git -C telegram-source submodule update --init --recursive --depth 1
+
+          for attempt in 1 2 3; do
+            echo "::group::Submodule download attempt ${attempt}/3"
+            if timeout 45m git -C telegram-source -c submodule.fetchJobs=8 submodule update --init --recursive --depth 1 --jobs 8; then
+              echo "All submodules fetched successfully."
+              git -C telegram-source submodule status --recursive
+              echo "::endgroup::"
+              exit 0
+            fi
+            result=$?
+            echo "Submodule attempt ${attempt} failed (exit ${result})."
+            git -C telegram-source submodule status --recursive || true
+            echo "::endgroup::"
+            if [ "${attempt}" -lt 3 ]; then
+              sleep 15
+            fi
+          done
+          echo "Submodule fetching failed after 3 attempts."
+          exit 1
 
       - name: Build using upstream Docker environment
         run: |
