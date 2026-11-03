@@ -38,8 +38,9 @@ jobs:
               git -C telegram-source submodule status --recursive
               echo "::endgroup::"
               exit 0
+            else
+              result=$?
             fi
-            result=$?
             echo "Submodule attempt ${attempt} failed (exit ${result})."
             git -C telegram-source submodule status --recursive || true
             echo "::endgroup::"
