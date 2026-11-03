@@ -52,7 +52,7 @@ jobs:
               return 0
             fi
 
-            mapfile -t paths < <(git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
+            mapfile -t paths < <(git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\\..*\\.path$' | awk '{print $2}')
             echo "Repository $repo_dir contains ${#paths[@]} direct submodules."
 
             for path in "${paths[@]}"; do
@@ -80,7 +80,7 @@ jobs:
                   echo "Parent repository: $repo_dir"
                   echo "Submodule path: $path"
                   echo "Configured URL:"
-                  git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\..*\.url$' || true
+                  git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\\..*\\.url$' || true
                   echo "Submodule status:"
                   git -C "$repo_dir" submodule status -- "$path" || true
                   echo "Failed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -101,16 +101,31 @@ jobs:
           echo "All nested submodules fetched successfully."
           git -C telegram-source submodule status --recursive
 
-      - name: Build using upstream Docker environment
+      - name: Build Docker image with detailed logs
+        timeout-minutes: 240
+        shell: bash
         run: |
-          docker build --tag chte1104-telegram-build telegram-source
-          docker run --rm \
-            --volume "${GITHUB_WORKSPACE}/telegram-source:/home/source" \
-            chte1104-telegram-build
+          set -Eeuo pipefail
+          echo "Docker build started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          timeout --signal=TERM --kill-after=120s 210m \
+            bash -o pipefail -c 'docker build --progress=plain --tag chte1104-telegram-build telegram-source 2>&1 | tee "$GITHUB_WORKSPACE/docker-build.log"'
+          echo "Docker build finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Run Android build with detailed logs
+        timeout-minutes: 120
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          echo "Android build started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          timeout --signal=TERM --kill-after=120s 100m \
+            bash -o pipefail -c 'docker run --rm --volume "$GITHUB_WORKSPACE/telegram-source:/home/source" chte1104-telegram-build 2>&1 | tee "$GITHUB_WORKSPACE/android-build.log"'
+          echo "Android build finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Show generated APKs
         if: always()
+        shell: bash
         run: |
+          echo "APK scan at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           find telegram-source/TMessagesProj/build/outputs/apk -type f -name "*.apk" -print 2>/dev/null || true
 
       - name: Upload APK artifacts
@@ -119,4 +134,15 @@ jobs:
           name: chte1104-apk
           path: telegram-source/TMessagesProj/build/outputs/apk/**/*.apk
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chte1104-build-diagnostics
+          path: |
+            docker-build.log
+            android-build.log
+          if-no-files-found: ignore
           retention-days: 14
