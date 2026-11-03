@@ -1,0 +1,51 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-android.yml"
+      - "README.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chte1104-android-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build upstream Android baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Fetch pinned Telegram Android source and submodules
+        run: |
+          git clone --recursive --depth 1 https://github.com/TelegramOrg/Telegram-Android.git telegram-source
+          git -C telegram-source fetch --depth 1 origin 3de37c8cfb039452be7398909461da6288babf15
+          git -C telegram-source checkout --detach 3de37c8cfb039452be7398909461da6288babf15
+          git -C telegram-source submodule update --init --recursive --depth 1
+
+      - name: Build using upstream Docker environment
+        run: |
+          docker build --tag chte1104-telegram-build telegram-source
+          docker run --rm \
+            --volume "${GITHUB_WORKSPACE}/telegram-source:/home/source" \
+            chte1104-telegram-build
+
+      - name: Show generated APKs
+        if: always()
+        run: |
+          find telegram-source/TMessagesProj/build/outputs/apk -type f -name "*.apk" -print 2>/dev/null || true
+
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chte1104-apk
+          path: telegram-source/TMessagesProj/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 14
