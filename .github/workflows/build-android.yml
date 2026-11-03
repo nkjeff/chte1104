@@ -52,7 +52,7 @@ jobs:
               return 0
             fi
 
-            mapfile -t paths < <(git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\\..*\\.path$' | awk '{print $2}')
+            mapfile -t paths < <(git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\..*\.path$' | awk '{print $2}')
             echo "Repository $repo_dir contains ${#paths[@]} direct submodules."
 
             for path in "${paths[@]}"; do
@@ -80,7 +80,7 @@ jobs:
                   echo "Parent repository: $repo_dir"
                   echo "Submodule path: $path"
                   echo "Configured URL:"
-                  git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\\..*\\.url$' || true
+                  git -C "$repo_dir" config -f .gitmodules --get-regexp '^submodule\..*\.url$' || true
                   echo "Submodule status:"
                   git -C "$repo_dir" submodule status -- "$path" || true
                   echo "Failed at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -100,6 +100,12 @@ jobs:
           fetch_submodules "telegram-source" ""
           echo "All nested submodules fetched successfully."
           git -C telegram-source submodule status --recursive
+          if git -C telegram-source submodule status --recursive | grep -E "^[+-U]"; then
+            echo "::error::One or more submodules are not initialized at the expected commit."
+            exit 1
+          fi
+          test -f telegram-source/TMessagesProj_Modules/media/core_settings.gradle
+          echo "Verified required media Gradle settings file."
 
       - name: Build Docker image with detailed logs
         timeout-minutes: 240
