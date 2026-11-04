@@ -235,7 +235,7 @@ jobs:
           recommendation_gate = "        loading = chats.isEmpty() || !UserConfig.getInstance(currentAccount).isPremium() && chats.size() == 1;"
           if data.count(recommendation_gate) != 1:
               raise SystemExit("Could not uniquely locate similar-channel recommendation gate")
-          data = data.replace(recommendation_gate, "        chats.clear();\n        loading = true;", 1)
+          data = data.replace(recommendation_gate, "        chats.clear();\n        loading = false;", 1)
           recommendations.write_text(data)
 
           # Roll back the unverified bottom-navigation remapping. Keep the
