@@ -246,11 +246,12 @@ jobs:
           # Remove low-value Help actions from Settings; keep the Privacy Policy entry.
           settings_activity = root / "TMessagesProj/src/main/java/org/telegram/ui/SettingsActivity.java"
           data = settings_activity.read_text()
-          help_items = """        items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
-        items.add(SettingCell.Factory.of(17, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_ask, getString(R.string.AskAQuestion)));
-        items.add(SettingCell.Factory.of(18, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));
-        items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
-          """
+          help_items = "\\n".join([
+              "        items.add(UItem.asHeader(getString(R.string.SettingsHelp)));",
+              "        items.add(SettingCell.Factory.of(17, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_ask, getString(R.string.AskAQuestion)));",
+              "        items.add(SettingCell.Factory.of(18, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));",
+              "        items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));",
+          ]) + "\\n"
           if data.count(help_items) != 1:
               raise SystemExit("Could not uniquely locate Settings Help section")
           data = data.replace(help_items, "", 1)
