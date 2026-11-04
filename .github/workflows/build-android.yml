@@ -189,23 +189,23 @@ jobs:
 
           dialogs = root / "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java"
           data = dialogs.read_text()
-          method = "    public void updateStoriesVisibility(boolean animated) {\n"
-          if data.count(method) != 1:
-              raise SystemExit("Could not uniquely locate main dialog Stories visibility method")
-          hide_stories = """    public void updateStoriesVisibility(boolean animated) {
-                  if (dialogStoriesCell != null) {
-                      dialogStoriesCell.setVisibility(View.GONE);
-                      dialogStoriesCellVisible = false;
-                      hasStories = false;
-                      hasOnlySlefStories = false;
-                      progressToDialogStoriesCell = 0f;
-                      progressToShowStories = 0f;
-                      if (!dialogStoriesCellVisible) {
-                          return;
-                      }
-                  }
-          """
-          data = data.replace(method, hide_stories, 1)
+          stories_visibility = """        boolean onlySelfStories = !isArchive() && getStoriesController().hasOnlySelfStories();
+                  boolean newVisibility;
+                  if (communityId != 0) {
+                      newVisibility = false;
+                  } else if (isArchive()) {
+                      newVisibility = !getStoriesController().getHiddenList().isEmpty();
+                  } else {
+                      newVisibility = !onlySelfStories && getStoriesController().hasStories();
+                      onlySelfStories = getStoriesController().hasOnlySelfStories();
+                  }"""
+          hidden_stories_visibility = """        // Preserve Telegram's original visibility transitions and scroll-offset cleanup,
+                  // while keeping the Stories row hidden in this client.
+                  boolean onlySelfStories = false;
+                  boolean newVisibility = false;"""
+          if data.count(stories_visibility) != 1:
+              raise SystemExit("Could not uniquely locate original Stories visibility calculation")
+          data = data.replace(stories_visibility, hidden_stories_visibility, 1)
           dialogs.write_text(data)
 
           settings = root / "TMessagesProj/src/main/java/org/telegram/ui/SettingsActivity.java"
