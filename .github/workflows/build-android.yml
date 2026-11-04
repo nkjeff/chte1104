@@ -174,7 +174,7 @@ jobs:
 
           dialogs = root / "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java"
           data = dialogs.read_text()
-          method = "    public void updateStoriesVisibility(boolean animated) {\\n"
+          method = "    public void updateStoriesVisibility(boolean animated) {\n"
           if data.count(method) != 1:
               raise SystemExit("Could not uniquely locate main dialog Stories visibility method")
           hide_stories = """    public void updateStoriesVisibility(boolean animated) {
