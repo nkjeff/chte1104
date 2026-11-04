@@ -245,8 +245,8 @@ jobs:
           data = main_tabs.read_text()
           def replace_main_tabs_block(old_lines, new_lines):
               nonlocal_data = data
-              old = "\\n".join(old_lines)
-              new = "\\n".join(new_lines)
+              old = "\n".join(old_lines)
+              new = "\n".join(new_lines)
               found = nonlocal_data.count(old)
               if found != 1:
                   raise SystemExit(f"Main tabs patch mismatch: expected 1 block, found {found}: {old_lines[0]}")
@@ -279,7 +279,7 @@ jobs:
               ("private static final int POSITION_CALLS_OR_SETTINGS = 2;", "private static final int POSITION_CALLS_OR_SETTINGS = 1;"),
               ("tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));", "tabsView.setPadding(0, 0, 0, 0);"),
               ("tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));", "tabsView.setMaxWidth(dp(1000));"),
-              ("        checkUi_callTabVisible(getUserConfig().showCallsTab, false);", "        tabsView.setViewVisible(tabs[INDEX_CONTACTS], false, false);\\n        tabsView.setViewVisible(tabs[INDEX_PROFILE], false, false);\\n        checkUi_callTabVisible(false, false);"),
+              ("        checkUi_callTabVisible(getUserConfig().showCallsTab, false);", "        tabsView.setViewVisible(tabs[INDEX_CONTACTS], false, false);\n        tabsView.setViewVisible(tabs[INDEX_PROFILE], false, false);\n        checkUi_callTabVisible(false, false);"),
           )
           for old, new in simple_replacements:
               if data.count(old) != 1:
@@ -349,7 +349,7 @@ jobs:
               raise SystemExit("Could not uniquely locate glass/blur bottom navigation background")
           start = data.index(start_marker)
           end = data.index(end_marker, start) + len(end_marker)
-          flat_background = "\\n".join([
+          flat_background = "\n".join([
               "        iBlur3SourceColor.setColor(android.graphics.Color.BLACK);",
               "        tabsView.setBackgroundColor(android.graphics.Color.BLACK);",
               "        fadeView = new View(context);",
@@ -375,7 +375,7 @@ jobs:
                   palette_lines[matches[0]] = key + "=" + value
               else:
                   palette_lines.append(key + "=" + value)
-          palette.write_text("\\n".join(palette_lines) + "\\n")
+          palette.write_text("\n".join(palette_lines) + "\n")
 
           print("Applied flat two-entry navigation: Chats and Settings")
           print("Hidden Contacts, Calls, and Profile bottom tabs without removing their in-app features")
