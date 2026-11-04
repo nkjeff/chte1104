@@ -238,6 +238,127 @@ jobs:
           data = data.replace(recommendation_gate, "        chats.clear();\n        loading = true;", 1)
           recommendations.write_text(data)
 
+          # Replace the upstream multi-tab glass bar with a flat two-entry
+          # navigation bar: Chats and Settings. Contacts remain reachable
+          # from the new-chat flow; calls and profile remain available in-app.
+          main_tabs = root / "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java"
+          data = main_tabs.read_text()
+          main_tab_replacements = (
+              ("public static final int TABS_COUNT = 4;", "public static final int TABS_COUNT = 2;", 1),
+              ("private static final int POSITION_CONTACTS = 1;", "private static final int POSITION_CONTACTS = 4;", 1),
+              ("private static final int POSITION_CALLS_OR_SETTINGS = 2;", "private static final int POSITION_CALLS_OR_SETTINGS = 1;", 1),
+              ("""    private static int indexToPosition(int index) {
+                  return index > 2 ? index - 1 : index;
+              }""",
+               """    private static int indexToPosition(int index) {
+                  if (index == INDEX_CHATS) {
+                      return POSITION_CHATS;
+                  }
+                  if (index == INDEX_SETTINGS) {
+                      return POSITION_CALLS_OR_SETTINGS;
+                  }
+                  if (index == INDEX_CONTACTS) {
+                      return POSITION_CONTACTS;
+                  }
+                  return POSITION_PROFILE;
+              }""", 1),
+              ("tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));",
+               "tabsView.setPadding(0, 0, 0, 0);", 1),
+              ("tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
+               "tabsView.setMaxWidth(dp(1000));", 1),
+              ("        checkUi_callTabVisible(getUserConfig().showCallsTab, false);",
+               """        tabsView.setViewVisible(tabs[INDEX_CONTACTS], false, false);
+                  tabsView.setViewVisible(tabs[INDEX_PROFILE], false, false);
+                  checkUi_callTabVisible(false, false);""", 1),
+              ("""        } else if (position == POSITION_CALLS_OR_SETTINGS) {
+                      if (getUserConfig().showCallsTab) {
+                          Bundle args = new Bundle();
+                          args.putBoolean("needFinishFragment", false);
+                          args.putBoolean("hasMainTabs", true);
+                          return new CallLogActivity(args);
+                      }
+                      Bundle args = new Bundle();
+                      args.putBoolean("hasMainTabs", true);
+                      return new SettingsActivity(args);""",
+               """        } else if (position == POSITION_CALLS_OR_SETTINGS) {
+                      Bundle args = new Bundle();
+                      args.putBoolean("hasMainTabs", true);
+                      return new SettingsActivity(args);""", 1),
+              ("""    private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {
+                  if (tabsView != null) {
+                      tabsView.setViewVisible(tabs[INDEX_SETTINGS], !callTabsVisible, animated);
+                      tabsView.setViewVisible(tabs[INDEX_CALLS], callTabsVisible, animated);
+                  }
+              }""",
+               """    private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {
+                  if (tabsView != null) {
+                      tabsView.setViewVisible(tabs[INDEX_SETTINGS], true, animated);
+                      tabsView.setViewVisible(tabs[INDEX_CALLS], false, animated);
+                  }
+              }""", 1),
+              ("""        } else if (id == NotificationCenter.callTabsVisibleToggled) {
+                      final boolean callTabsVisible = getUserConfig().showCallsTab;
+                      checkUi_callTabVisible(callTabsVisible, true);
+                      if (viewPager != null && viewPager.getCurrentPosition() == POSITION_CALLS_OR_SETTINGS) {
+                          viewPager.scrollToPosition(POSITION_CHATS);
+                          selectTab(POSITION_CHATS, true);
+                          dropCallsFragmentAfterPageScroll = true;
+                      } else {
+                          dropFragmentAtPosition(POSITION_CALLS_OR_SETTINGS);
+                      }""",
+               """        } else if (id == NotificationCenter.callTabsVisibleToggled) {
+                      checkUi_callTabVisible(false, true);""", 1),
+          )
+          for old, new, expected in main_tab_replacements:
+              found = data.count(old)
+              if found != expected:
+                  raise SystemExit(f"Main tabs patch mismatch: expected {expected}, found {found} for {old[:100]!r}")
+              data = data.replace(old, new, 1)
+
+          import re
+          background_pattern = re.compile(
+              r"        iBlur3SourceColor\\.setColor\\(getThemedColor\\(Theme\\.key_windowBackgroundWhite\\)\\);\\n"
+              r".*?"
+              r"        contentView\\.addView\\(fadeView, LayoutHelper\\.createFrame\\(LayoutHelper\\.MATCH_PARENT, 0, Gravity\\.BOTTOM\\)\\);\\n",
+              re.DOTALL,
+          )
+          data, background_count = background_pattern.subn(
+              """        iBlur3SourceColor.setColor(android.graphics.Color.BLACK);
+                  tabsView.setBackgroundColor(android.graphics.Color.BLACK);
+                  fadeView = new View(context);
+                  fadeView.setVisibility(View.GONE);
+                  contentView.addView(fadeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM));
+              """,
+              data,
+              count=1,
+          )
+          if background_count != 1:
+              raise SystemExit("Could not uniquely replace glass/blur bottom navigation background")
+          main_tabs.write_text(data)
+
+          # Match the requested monochrome icon and label states.
+          palette = root / "TMessagesProj/src/main/assets/darkblue.attheme"
+          palette_lines = palette.read_text().splitlines()
+          tab_colors = {
+              "glass_tabUnselected": "-7829368",
+              "glass_tabSelected": "-1",
+              "glass_tabSelectedText": "-1",
+          }
+          for key, value in tab_colors.items():
+              matches = [i for i, line in enumerate(palette_lines) if line.startswith(key + "=")]
+              if len(matches) > 1:
+                  raise SystemExit(f"Duplicate navigation theme color: {key}")
+              if matches:
+                  palette_lines[matches[0]] = key + "=" + value
+              else:
+                  palette_lines.append(key + "=" + value)
+          palette.write_text("\\n".join(palette_lines) + "\\n")
+
+          print("Applied flat two-entry navigation: Chats and Settings")
+          print("Hidden Contacts, Calls, and Profile bottom tabs without removing their in-app features")
+          print("Removed glass/blur/pill bottom bar background; set opaque pure black")
+          print("Set selected tab icon/text to white and unselected icon/text to gray")
+
           # Remove the sponsored/proxy promo dialog from the main chat list.
           # Keep official PSA announcements visible.
           dialogs_adapter = root / "TMessagesProj/src/main/java/org/telegram/ui/Adapters/DialogsAdapter.java"
