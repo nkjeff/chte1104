@@ -247,7 +247,7 @@ jobs:
             }
         }
 
-        dialogsCount = array.size();"""
+          dialogsCount = array.size();"""
           filtered_array = """            if (array == null) {
                 array = new ArrayList<>();
             }
