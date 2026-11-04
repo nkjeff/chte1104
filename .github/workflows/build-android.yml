@@ -243,28 +243,28 @@ jobs:
           dialogs_adapter = root / "TMessagesProj/src/main/java/org/telegram/ui/Adapters/DialogsAdapter.java"
           data = dialogs_adapter.read_text()
           array_anchor = """            if (array == null) {
-                array = new ArrayList<>();
-            }
-        }
-
-          dialogsCount = array.size();"""
-          filtered_array = """            if (array == null) {
-                array = new ArrayList<>();
-            }
-          }
-
-          if (dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT && folderId == 0 && communityId == 0) {
-              ArrayList<TLRPC.Dialog> visibleDialogs = new ArrayList<>(array.size());
-              for (TLRPC.Dialog dialog : array) {
-                  if (dialog == null || !messagesController.isPromoDialog(dialog.id, false)
-                          || messagesController.promoDialogType == MessagesController.PROMO_TYPE_PSA) {
-                      visibleDialogs.add(dialog);
+                          array = new ArrayList<>();
+                      }
                   }
-              }
-              array = visibleDialogs;
-          }
 
-          dialogsCount = array.size();"""
+                  dialogsCount = array.size();"""
+          filtered_array = """            if (array == null) {
+                          array = new ArrayList<>();
+                      }
+                  }
+
+                  if (dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT && folderId == 0 && communityId == 0) {
+                      ArrayList<TLRPC.Dialog> visibleDialogs = new ArrayList<>(array.size());
+                      for (TLRPC.Dialog dialog : array) {
+                          if (dialog == null || !messagesController.isPromoDialog(dialog.id, false)
+                                  || messagesController.promoDialogType == MessagesController.PROMO_TYPE_PSA) {
+                              visibleDialogs.add(dialog);
+                          }
+                      }
+                      array = visibleDialogs;
+                  }
+
+                  dialogsCount = array.size();"""
           if data.count(array_anchor) != 1:
               raise SystemExit("Could not uniquely locate main chat-list dialog array in DialogsAdapter")
           data = data.replace(array_anchor, filtered_array, 1)
