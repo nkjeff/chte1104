@@ -154,8 +154,8 @@ jobs:
           root = Path("telegram-source")
           strings = root / "TMessagesProj/src/main/res/values/strings.xml"
           data = strings.read_text()
-          for label in ("AppName", "AppNameBeta"):
-              old = f'<string name="{label}">Telegram</string>'
+          for label, old_name in (("AppName", "Telegram"), ("AppNameBeta", "Telegram Beta")):
+              old = f'<string name="{label}">{old_name}</string>'
               new = f'<string name="{label}">chte1104</string>'
               if data.count(old) != 1:
                   raise SystemExit(f"Could not uniquely rename {label}")
