@@ -172,6 +172,27 @@ jobs:
               data = data.replace(old, new, 1)
           theme_java.write_text(data)
 
+          dialogs = root / "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java"
+          data = dialogs.read_text()
+          method = "    public void updateStoriesVisibility(boolean animated) {\\n"
+          if data.count(method) != 1:
+              raise SystemExit("Could not uniquely locate main dialog Stories visibility method")
+          hide_stories = """    public void updateStoriesVisibility(boolean animated) {
+                  if (dialogStoriesCell != null) {
+                      dialogStoriesCell.setVisibility(View.GONE);
+                      dialogStoriesCellVisible = false;
+                      hasStories = false;
+                      hasOnlySlefStories = false;
+                      progressToDialogStoriesCell = 0f;
+                      progressToShowStories = 0f;
+                      if (!dialogStoriesCellVisible) {
+                          return;
+                      }
+                  }
+          """
+          data = data.replace(method, hide_stories, 1)
+          dialogs.write_text(data)
+
           palette = root / "TMessagesProj/src/main/assets/darkblue.attheme"
           palette_lines = palette.read_text().splitlines()
           black_keys = (
