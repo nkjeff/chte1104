@@ -122,6 +122,20 @@ jobs:
               raise SystemExit("Could not uniquely locate TMessagesProj defaultConfig.")
           gradle_file.write_text(source.replace(needle, replacement, 1))
 
+          app_gradle = Path("telegram-source/TMessagesProj_AppStandalone/build.gradle")
+          app_data = app_gradle.read_text()
+          flavor_block = '''        afat {
+              ndk {
+                  abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+              }'''
+          arm64_block = '''        afat {
+              ndk {
+                  abiFilters "arm64-v8a"
+              }'''
+          if app_data.count(flavor_block) != 1:
+              raise SystemExit("Could not uniquely locate standalone afat ABI flavor block.")
+          app_gradle.write_text(app_data.replace(flavor_block, arm64_block, 1))
+
           dockerfile = Path("telegram-source/Dockerfile")
           source = dockerfile.read_text()
           if source.count("CMD mkdir -p") != 1:
@@ -142,6 +156,7 @@ jobs:
           print("Configured app: standard standalone only (Huawei and other variants excluded)")
           PY
           grep -A4 -B1 "abiFilters 'arm64-v8a'" telegram-source/TMessagesProj/build.gradle
+          grep -A4 -B1 'abiFilters "arm64-v8a"' telegram-source/TMessagesProj_AppStandalone/build.gradle
           grep -n "assembleAfatStandalone" telegram-source/Dockerfile
 
       - name: Apply chte1104 minimal branding and dark theme
