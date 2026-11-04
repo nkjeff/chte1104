@@ -208,6 +208,28 @@ jobs:
           data = data.replace(method, hide_stories, 1)
           dialogs.write_text(data)
 
+          settings = root / "TMessagesProj/src/main/java/org/telegram/ui/SettingsActivity.java"
+          data = settings.read_text()
+          settings_gates = (
+              ("if (walletAbove && getMessagesController().config.walletAvailable.get()) {",
+               "if (false && walletAbove && getMessagesController().config.walletAvailable.get()) {", 1),
+              ("if (!walletAbove && getMessagesController().config.walletAvailable.get()) {",
+               "if (false && !walletAbove && getMessagesController().config.walletAvailable.get()) {", 1),
+              ("if (!getMessagesController().premiumFeaturesBlocked()) {",
+               "if (false && !getMessagesController().premiumFeaturesBlocked()) {", 2),
+              ("if (getMessagesController().starsPurchaseAvailable()) {",
+               "if (false && getMessagesController().starsPurchaseAvailable()) {", 1),
+              ("if (ApplicationLoader.isBetaBuild() || ApplicationLoader.isStandaloneBuild() || ApplicationLoader.isHuaweiStoreBuild() || (StarsController.getInstance(currentAccount, true).balanceAvailable() && (StarsController.getInstance(currentAccount, true).hasTransactions() || StarsController.getInstance(currentAccount, true).getBalance().positive()))) {",
+               "if (false && (ApplicationLoader.isBetaBuild() || ApplicationLoader.isStandaloneBuild() || ApplicationLoader.isHuaweiStoreBuild() || (StarsController.getInstance(currentAccount, true).balanceAvailable() && (StarsController.getInstance(currentAccount, true).hasTransactions() || StarsController.getInstance(currentAccount, true).getBalance().positive())))) {", 1),
+              ("if (!getMessagesController().premiumPurchaseBlocked()) {",
+               "if (false && !getMessagesController().premiumPurchaseBlocked()) {", 1),
+          )
+          for old, new, expected in settings_gates:
+              if data.count(old) != expected:
+                  raise SystemExit(f"Settings row gate mismatch: expected {expected}, found {data.count(old)} for {old}")
+              data = data.replace(old, new)
+          settings.write_text(data)
+
           palette = root / "TMessagesProj/src/main/assets/darkblue.attheme"
           palette_lines = palette.read_text().splitlines()
           black_keys = (
