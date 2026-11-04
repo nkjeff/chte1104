@@ -238,6 +238,48 @@ jobs:
           data = data.replace(recommendation_gate, "        chats.clear();\n        loading = true;", 1)
           recommendations.write_text(data)
 
+          # Remove the sponsored/proxy promo dialog from the main chat list.
+          # Keep official PSA announcements visible.
+          dialogs_adapter = root / "TMessagesProj/src/main/java/org/telegram/ui/Adapters/DialogsAdapter.java"
+          data = dialogs_adapter.read_text()
+          array_anchor = """            if (array == null) {
+                array = new ArrayList<>();
+            }
+        }
+
+        dialogsCount = array.size();"""
+          filtered_array = """            if (array == null) {
+                array = new ArrayList<>();
+            }
+          }
+
+          if (dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT && folderId == 0 && communityId == 0) {
+              ArrayList<TLRPC.Dialog> visibleDialogs = new ArrayList<>(array.size());
+              for (TLRPC.Dialog dialog : array) {
+                  if (dialog == null || !messagesController.isPromoDialog(dialog.id, false)
+                          || messagesController.promoDialogType == MessagesController.PROMO_TYPE_PSA) {
+                      visibleDialogs.add(dialog);
+                  }
+              }
+              array = visibleDialogs;
+          }
+
+          dialogsCount = array.size();"""
+          if data.count(array_anchor) != 1:
+              raise SystemExit("Could not uniquely locate main chat-list dialog array in DialogsAdapter")
+          data = data.replace(array_anchor, filtered_array, 1)
+          dialogs_adapter.write_text(data)
+
+          # Hide Premium upsell banners above the main chat list, without
+          # changing Premium account features or in-chat Premium functionality.
+          dialogs_activity = root / "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java"
+          data = dialogs_activity.read_text()
+          premium_gate = "if (!MessagesController.getInstance(currentAccount).premiumFeaturesBlocked() && folderId == 0 && communityId == 0) {"
+          if data.count(premium_gate) != 3:
+              raise SystemExit(f"Expected 3 chat-list Premium hint gates, found {data.count(premium_gate)}")
+          data = data.replace(premium_gate, "if (false && !MessagesController.getInstance(currentAccount).premiumFeaturesBlocked() && folderId == 0 && communityId == 0) {")
+          dialogs_activity.write_text(data)
+
           palette = root / "TMessagesProj/src/main/assets/darkblue.attheme"
           palette_lines = palette.read_text().splitlines()
           black_keys = (
