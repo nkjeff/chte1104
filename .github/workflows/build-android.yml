@@ -107,6 +107,43 @@ jobs:
           test -f telegram-source/TMessagesProj_Modules/media/core_settings.gradle
           echo "Verified required media Gradle settings file."
 
+      - name: Restrict build to standard standalone ARM64 APK
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gradle_file = Path("telegram-source/TMessagesProj/build.gradle")
+          source = gradle_file.read_text()
+          needle = "    defaultConfig {\n        minSdkVersion 23"
+          replacement = "    defaultConfig {\n        ndk {\n            abiFilters 'arm64-v8a'\n        }\n        minSdkVersion 23"
+          if source.count(needle) != 1:
+              raise SystemExit("Could not uniquely locate TMessagesProj defaultConfig.")
+          gradle_file.write_text(source.replace(needle, replacement, 1))
+
+          dockerfile = Path("telegram-source/Dockerfile")
+          source = dockerfile.read_text()
+          if source.count("CMD mkdir -p") != 1:
+              raise SystemExit("Could not uniquely locate upstream Docker CMD.")
+          source = source[:source.index("CMD mkdir -p")] + """CMD mkdir -p /home/source/TMessagesProj/build/outputs/apk && \\
+              mkdir -p /home/source/TMessagesProj/build/outputs/mapping/TMessagesProj_AppStandalone && \\
+              tar -C /home/source \\
+                  --exclude=./.git --exclude=.cxx --exclude=build --exclude=.gradle --exclude=./local.properties \\
+                  -cf - . | tar -C /home/gradle -xf - && \\
+              cd /home/gradle && \\
+              gradle --parallel \\
+                  :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace && \\
+              cp -R /home/gradle/TMessagesProj_AppStandalone/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk && \\
+              cp -R /home/gradle/TMessagesProj_AppStandalone/build/outputs/mapping/. /home/source/TMessagesProj/build/outputs/mapping/TMessagesProj_AppStandalone
+          """
+          dockerfile.write_text(source)
+          print("Configured ABI filter: arm64-v8a")
+          print("Configured app: standard standalone only (Huawei and other variants excluded)")
+          PY
+          grep -A4 -B1 "abiFilters 'arm64-v8a'" telegram-source/TMessagesProj/build.gradle
+          grep -n "assembleAfatStandalone" telegram-source/Dockerfile
+
       - name: Build Docker image with detailed logs
         timeout-minutes: 240
         shell: bash
