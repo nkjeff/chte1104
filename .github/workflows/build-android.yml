@@ -125,13 +125,13 @@ jobs:
           app_gradle = Path("telegram-source/TMessagesProj_AppStandalone/build.gradle")
           app_data = app_gradle.read_text()
           flavor_block = '''        afat {
-              ndk {
-                  abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-              }'''
+                      ndk {
+                          abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+                      }'''
           arm64_block = '''        afat {
-              ndk {
-                  abiFilters "arm64-v8a"
-              }'''
+                      ndk {
+                          abiFilters "arm64-v8a"
+                      }'''
           if app_data.count(flavor_block) != 1:
               raise SystemExit("Could not uniquely locate standalone afat ABI flavor block.")
           app_gradle.write_text(app_data.replace(flavor_block, arm64_block, 1))
