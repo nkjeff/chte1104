@@ -189,7 +189,7 @@ jobs:
 
           dialogs = root / "TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java"
           data = dialogs.read_text()
-          stories_visibility = "\\n".join([
+          stories_visibility = "\n".join([
               "        boolean onlySelfStories = !isArchive() && getStoriesController().hasOnlySelfStories();",
               "        boolean newVisibility;",
               "        if (communityId != 0) {",
@@ -201,7 +201,7 @@ jobs:
               "            onlySelfStories = getStoriesController().hasOnlySelfStories();",
               "        }",
           ])
-          hidden_stories_visibility = "\\n".join([
+          hidden_stories_visibility = "\n".join([
               "        // Preserve Telegram's original visibility transitions and scroll-offset cleanup,",
               "        // while keeping the Stories row hidden in this client.",
               "        boolean onlySelfStories = false;",
