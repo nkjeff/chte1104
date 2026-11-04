@@ -157,7 +157,7 @@ jobs:
           data = strings.read_text()
           for name in ("AppName", "AppNameBeta"):
               pattern = rf'(<string name="{name}">)[^<]*(</string>)'
-              data, count = re.subn(pattern, rf'\\g<1>chte1104\\g<2>', data, count=1)
+              data, count = re.subn(pattern, rf'\g<1>chte1104\g<2>', data, count=1)
               if count != 1:
                   raise SystemExit(f"Could not uniquely rename {name}")
           strings.write_text(data)
@@ -191,7 +191,7 @@ jobs:
           replacements = {key: -16777216 for key in black_keys}
           replacements.update({key: signed("FF79BFFF") for key in blue_keys})
           for key, value in replacements.items():
-              pattern = rf'(?m)^({re.escape(key)}=)-?\\d+        timeout-minutes: 240
+              pattern = rf'(?m)^({re.escape(key)}=)-?\d+        timeout-minutes: 240
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -236,7 +236,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-              data, count = re.subn(pattern, rf'\\g<1>{value}', data, count=1)
+              data, count = re.subn(pattern, rf'\g<1>{value}', data, count=1)
               if count != 1:
                   raise SystemExit(f"Could not uniquely set theme color: {key}")
           palette.write_text(data)
