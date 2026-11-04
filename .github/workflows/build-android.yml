@@ -242,10 +242,117 @@ jobs:
           data = data.replace(recommendation_gate, "        chats.clear();\n        loading = false;", 1)
           recommendations.write_text(data)
 
-          # Roll back the unverified bottom-navigation remapping. Keep the
-          # upstream page/gesture structure intact while the two-entry design
-          # is reworked without disturbing vertical list scrolling.
-          print("Rolled back experimental main-tab pager remapping to preserve scrolling")
+          # Keep Telegram's original pager positions and fragment count.
+          # Only hide unused bottom-tab buttons; Chats stays at page 0 and Settings
+          # stays at its original page 2. This avoids the previous pager remapping
+          # that could interfere with scrolling and fragment lifecycle.
+          main_tabs = root / "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java"
+          data = main_tabs.read_text()
+
+          def replace_main_tabs_block(old_lines, new_lines):
+              old = "\n".join(old_lines)
+              new = "\n".join(new_lines)
+              found = data.count(old)
+              if found != 1:
+                  raise SystemExit(f"Main tabs patch mismatch: expected 1 block, found {found}: {old_lines[0]}")
+              return data.replace(old, new, 1)
+
+          old_initial_tabs = "        checkUi_callTabVisible(getUserConfig().showCallsTab, false);"
+          new_initial_tabs = "\n".join([
+              "        tabsView.setViewVisible(tabs[INDEX_CONTACTS], false, false);",
+              "        tabsView.setViewVisible(tabs[INDEX_PROFILE], false, false);",
+              "        checkUi_callTabVisible(false, false);",
+          ])
+          if data.count(old_initial_tabs) != 1:
+              raise SystemExit("Could not uniquely locate initial bottom-tab visibility setup")
+          data = data.replace(old_initial_tabs, new_initial_tabs, 1)
+
+          data = replace_main_tabs_block(
+              [
+                  "        } else if (position == POSITION_CALLS_OR_SETTINGS) {",
+                  "            if (getUserConfig().showCallsTab) {",
+                  "                Bundle args = new Bundle();",
+                  "                args.putBoolean(\"needFinishFragment\", false);",
+                  "                args.putBoolean(\"hasMainTabs\", true);",
+                  "                return new CallLogActivity(args);",
+                  "            }",
+                  "            Bundle args = new Bundle();",
+                  "            args.putBoolean(\"hasMainTabs\", true);",
+                  "            return new SettingsActivity(args);",
+              ],
+              [
+                  "        } else if (position == POSITION_CALLS_OR_SETTINGS) {",
+                  "            Bundle args = new Bundle();",
+                  "            args.putBoolean(\"hasMainTabs\", true);",
+                  "            return new SettingsActivity(args);",
+              ],
+          )
+
+          data = replace_main_tabs_block(
+              [
+                  "    private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {",
+                  "        if (tabsView != null) {",
+                  "            tabsView.setViewVisible(tabs[INDEX_SETTINGS], !callTabsVisible, animated);",
+                  "            tabsView.setViewVisible(tabs[INDEX_CALLS], callTabsVisible, animated);",
+                  "        }",
+                  "    }",
+              ],
+              [
+                  "    private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {",
+                  "        if (tabsView != null) {",
+                  "            tabsView.setViewVisible(tabs[INDEX_SETTINGS], true, animated);",
+                  "            tabsView.setViewVisible(tabs[INDEX_CALLS], false, animated);",
+                  "        }",
+                  "    }",
+              ],
+          )
+
+          data = replace_main_tabs_block(
+              [
+                  "        } else if (id == NotificationCenter.callTabsVisibleToggled) {",
+                  "            final boolean callTabsVisible = getUserConfig().showCallsTab;",
+                  "            checkUi_callTabVisible(callTabsVisible, true);",
+                  "            if (viewPager != null && viewPager.getCurrentPosition() == POSITION_CALLS_OR_SETTINGS) {",
+                  "                viewPager.scrollToPosition(POSITION_CHATS);",
+                  "                selectTab(POSITION_CHATS, true);",
+                  "                dropCallsFragmentAfterPageScroll = true;",
+                  "            } else {",
+                  "                dropFragmentAtPosition(POSITION_CALLS_OR_SETTINGS);",
+                  "            }",
+              ],
+              [
+                  "        } else if (id == NotificationCenter.callTabsVisibleToggled) {",
+                  "            checkUi_callTabVisible(false, true);",
+              ],
+          )
+
+          start_marker = "        iBlur3SourceColor.setColor(getThemedColor(Theme.key_windowBackgroundWhite));"
+          end_marker = "        contentView.addView(fadeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM));"
+          if data.count(start_marker) != 1 or data.count(end_marker) != 1:
+              raise SystemExit("Could not uniquely locate glass/blur bottom navigation background")
+          start = data.index(start_marker)
+          end = data.index(end_marker, start) + len(end_marker)
+          flat_background = "\n".join([
+              "        iBlur3SourceColor.setColor(android.graphics.Color.BLACK);",
+              "        tabsView.setBackgroundColor(android.graphics.Color.BLACK);",
+              "        fadeView = new View(context);",
+              "        fadeView.setVisibility(View.GONE);",
+              "        contentView.addView(fadeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM));",
+          ])
+          data = data[:start] + flat_background + data[end:]
+          data = data.replace(
+              "        tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));",
+              "        tabsView.setPadding(0, 0, 0, 0);",
+              1,
+          )
+          data = data.replace(
+              "        tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));",
+              "        tabsView.setMaxWidth(dp(1000));",
+              1,
+          )
+          main_tabs.write_text(data)
+          print("Applied two visible bottom tabs: Chats + Settings; original pager positions retained")
+          print("Contacts, Calls, and Profile bottom buttons hidden; call/profile features elsewhere remain")
 
           # Remove low-value Help actions from Settings; keep the Privacy Policy entry.
           settings_activity = root / "TMessagesProj/src/main/java/org/telegram/ui/SettingsActivity.java"
@@ -255,13 +362,13 @@ jobs:
               "        items.add(SettingCell.Factory.of(17, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_ask, getString(R.string.AskAQuestion)));",
               "        items.add(SettingCell.Factory.of(18, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));",
               "        items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));",
+              "        items.add(SettingCell.Factory.of(19, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_policy, getString(R.string.PrivacyPolicy)));",
           ]) + "\n"
           if data.count(help_items) != 1:
               raise SystemExit("Could not uniquely locate Settings Help section")
           data = data.replace(help_items, "", 1)
           settings_activity.write_text(data)
-          print("Removed Ask a Question, Telegram FAQ, and Telegram Features from Settings")
-          print("Kept the Privacy Policy entry")
+          print("Removed Ask a Question, Telegram FAQ, Telegram Features, and Privacy Policy from Settings")
 
           # Remove the sponsored/proxy promo dialog from the main chat list.
           # Keep official PSA announcements visible.
