@@ -150,16 +150,16 @@ jobs:
           set -Eeuo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           root = Path("telegram-source")
           strings = root / "TMessagesProj/src/main/res/values/strings.xml"
           data = strings.read_text()
-          for name in ("AppName", "AppNameBeta"):
-              pattern = rf'(<string name="{name}">)[^<]*(</string>)'
-              data, count = re.subn(pattern, rf'\g<1>chte1104\g<2>', data, count=1)
-              if count != 1:
-                  raise SystemExit(f"Could not uniquely rename {name}")
+          for label in ("AppName", "AppNameBeta"):
+              old = f'<string name="{label}">Telegram</string>'
+              new = f'<string name="{label}">chte1104</string>'
+              if data.count(old) != 1:
+                  raise SystemExit(f"Could not uniquely rename {label}")
+              data = data.replace(old, new, 1)
           strings.write_text(data)
 
           theme_java = root / "TMessagesProj/src/main/java/org/telegram/ui/ActionBar/Theme.java"
@@ -173,7 +173,7 @@ jobs:
           theme_java.write_text(data)
 
           palette = root / "TMessagesProj/src/main/assets/darkblue.attheme"
-          data = palette.read_text()
+          palette_lines = palette.read_text().splitlines()
           black_keys = (
               "windowBackgroundWhite", "windowBackgroundGray", "actionBarDefault",
               "dialogBackground", "chats_menuBackground", "chat_wallpaper",
@@ -182,64 +182,17 @@ jobs:
           )
           blue_keys = (
               "windowBackgroundWhiteBlueText", "dialogTextBlue",
-              "actionBarTabActiveText", "actionBarTabLine",
-              "switchTrackBlueChecked",
+              "actionBarTabActiveText", "actionBarTabLine", "switchTrackBlueChecked",
           )
-          def signed(hex_value):
-              value = int(hex_value, 16)
-              return value - 0x100000000 if value >= 0x80000000 else value
-          replacements = {key: -16777216 for key in black_keys}
-          replacements.update({key: signed("FF79BFFF") for key in blue_keys})
+          blue = str(-0x864001)
+          replacements = {key: "-16777216" for key in black_keys}
+          replacements.update({key: blue for key in blue_keys})
           for key, value in replacements.items():
-              pattern = rf'(?m)^({re.escape(key)}=)-?\d+        timeout-minutes: 240
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          echo "Docker build started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          timeout --signal=TERM --kill-after=120s 210m \
-            bash -o pipefail -c 'docker build --progress=plain --tag chte1104-telegram-build telegram-source 2>&1 | tee "$GITHUB_WORKSPACE/docker-build.log"'
-          echo "Docker build finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-      - name: Run Android build with detailed logs
-        timeout-minutes: 120
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          echo "Android build started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          timeout --signal=TERM --kill-after=120s 100m \
-            bash -o pipefail -c 'docker run --rm --volume "$GITHUB_WORKSPACE/telegram-source:/home/source" chte1104-telegram-build 2>&1 | tee "$GITHUB_WORKSPACE/android-build.log"'
-          echo "Android build finished at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-      - name: Show generated APKs
-        if: always()
-        shell: bash
-        run: |
-          echo "APK scan at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          find telegram-source/TMessagesProj/build/outputs/apk -type f -name "*.apk" -print 2>/dev/null || true
-
-      - name: Upload APK artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: chte1104-apk
-          path: telegram-source/TMessagesProj/build/outputs/apk/**/*.apk
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload build diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: chte1104-build-diagnostics
-          path: |
-            docker-build.log
-            android-build.log
-          if-no-files-found: ignore
-          retention-days: 14
-
-              data, count = re.subn(pattern, rf'\g<1>{value}', data, count=1)
-              if count != 1:
-                  raise SystemExit(f"Could not uniquely set theme color: {key}")
-          palette.write_text(data)
+              matches = [i for i, line in enumerate(palette_lines) if line.startswith(key + "=")]
+              if len(matches) != 1:
+                  raise SystemExit(f"Could not uniquely set theme color: {key} ({len(matches)} matches)")
+              palette_lines[matches[0]] = key + "=" + value
+          palette.write_text("\n".join(palette_lines) + "\n")
 
           print("Applied chte1104 app label")
           print("Set first-run day/night theme to Dark")
