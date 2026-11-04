@@ -238,149 +238,25 @@ jobs:
           data = data.replace(recommendation_gate, "        chats.clear();\n        loading = true;", 1)
           recommendations.write_text(data)
 
-          # Replace the upstream multi-tab glass bar with a flat two-entry
-          # navigation bar: Chats and Settings. Contacts remain reachable
-          # from the new-chat flow; calls and profile remain available in-app.
-          main_tabs = root / "TMessagesProj/src/main/java/org/telegram/ui/MainTabsActivity.java"
-          data = main_tabs.read_text()
-          def replace_main_tabs_block(old_lines, new_lines):
-              nonlocal_data = data
-              old = "\n".join(old_lines)
-              new = "\n".join(new_lines)
-              found = nonlocal_data.count(old)
-              if found != 1:
-                  raise SystemExit(f"Main tabs patch mismatch: expected 1 block, found {found}: {old_lines[0]}")
-              return nonlocal_data.replace(old, new, 1)
+          # Roll back the unverified bottom-navigation remapping. Keep the
+          # upstream page/gesture structure intact while the two-entry design
+          # is reworked without disturbing vertical list scrolling.
+          print("Rolled back experimental main-tab pager remapping to preserve scrolling")
 
-          data = replace_main_tabs_block(
-              [
-                  "    private static int indexToPosition(int index) {",
-                  "        return index > 2 ? index - 1 : index;",
-                  "    }",
-              ],
-              [
-                  "    private static int indexToPosition(int index) {",
-                  "        if (index == INDEX_CHATS) {",
-                  "            return POSITION_CHATS;",
-                  "        }",
-                  "        if (index == INDEX_SETTINGS) {",
-                  "            return POSITION_CALLS_OR_SETTINGS;",
-                  "        }",
-                  "        if (index == INDEX_CONTACTS) {",
-                  "            return POSITION_CONTACTS;",
-                  "        }",
-                  "        return POSITION_PROFILE;",
-                  "    }",
-              ],
-          )
-          simple_replacements = (
-              ("public static final int TABS_COUNT = 4;", "public static final int TABS_COUNT = 2;"),
-              ("private static final int POSITION_CONTACTS = 1;", "private static final int POSITION_CONTACTS = 4;"),
-              ("private static final int POSITION_CALLS_OR_SETTINGS = 2;", "private static final int POSITION_CALLS_OR_SETTINGS = 1;"),
-              ("tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));", "tabsView.setPadding(0, 0, 0, 0);"),
-              ("tabsView.setMaxWidth(dp(328 + DialogsActivity.MAIN_TABS_MARGIN * 2));", "tabsView.setMaxWidth(dp(1000));"),
-              ("        checkUi_callTabVisible(getUserConfig().showCallsTab, false);", "        tabsView.setViewVisible(tabs[INDEX_CONTACTS], false, false);\n        tabsView.setViewVisible(tabs[INDEX_PROFILE], false, false);\n        checkUi_callTabVisible(false, false);"),
-          )
-          for old, new in simple_replacements:
-              if data.count(old) != 1:
-                  raise SystemExit(f"Main tabs patch mismatch: expected one occurrence of {old!r}")
-              data = data.replace(old, new, 1)
-
-          data = replace_main_tabs_block(
-              [
-                  "        } else if (position == POSITION_CALLS_OR_SETTINGS) {",
-                  "            if (getUserConfig().showCallsTab) {",
-                  "                Bundle args = new Bundle();",
-                  "                args.putBoolean(\"needFinishFragment\", false);",
-                  "                args.putBoolean(\"hasMainTabs\", true);",
-                  "                return new CallLogActivity(args);",
-                  "            }",
-                  "            Bundle args = new Bundle();",
-                  "            args.putBoolean(\"hasMainTabs\", true);",
-                  "            return new SettingsActivity(args);",
-              ],
-              [
-                  "        } else if (position == POSITION_CALLS_OR_SETTINGS) {",
-                  "            Bundle args = new Bundle();",
-                  "            args.putBoolean(\"hasMainTabs\", true);",
-                  "            return new SettingsActivity(args);",
-              ],
-          )
-          data = replace_main_tabs_block(
-              [
-                  "    private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {",
-                  "        if (tabsView != null) {",
-                  "            tabsView.setViewVisible(tabs[INDEX_SETTINGS], !callTabsVisible, animated);",
-                  "            tabsView.setViewVisible(tabs[INDEX_CALLS], callTabsVisible, animated);",
-                  "        }",
-                  "    }",
-              ],
-              [
-                  "    private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {",
-                  "        if (tabsView != null) {",
-                  "            tabsView.setViewVisible(tabs[INDEX_SETTINGS], true, animated);",
-                  "            tabsView.setViewVisible(tabs[INDEX_CALLS], false, animated);",
-                  "        }",
-                  "    }",
-              ],
-          )
-          data = replace_main_tabs_block(
-              [
-                  "        } else if (id == NotificationCenter.callTabsVisibleToggled) {",
-                  "            final boolean callTabsVisible = getUserConfig().showCallsTab;",
-                  "            checkUi_callTabVisible(callTabsVisible, true);",
-                  "            if (viewPager != null && viewPager.getCurrentPosition() == POSITION_CALLS_OR_SETTINGS) {",
-                  "                viewPager.scrollToPosition(POSITION_CHATS);",
-                  "                selectTab(POSITION_CHATS, true);",
-                  "                dropCallsFragmentAfterPageScroll = true;",
-                  "            } else {",
-                  "                dropFragmentAtPosition(POSITION_CALLS_OR_SETTINGS);",
-                  "            }",
-              ],
-              [
-                  "        } else if (id == NotificationCenter.callTabsVisibleToggled) {",
-                  "            checkUi_callTabVisible(false, true);",
-              ],
-          )
-
-          start_marker = "        iBlur3SourceColor.setColor(getThemedColor(Theme.key_windowBackgroundWhite));"
-          end_marker = "        contentView.addView(fadeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM));"
-          if data.count(start_marker) != 1 or data.count(end_marker) != 1:
-              raise SystemExit("Could not uniquely locate glass/blur bottom navigation background")
-          start = data.index(start_marker)
-          end = data.index(end_marker, start) + len(end_marker)
-          flat_background = "\n".join([
-              "        iBlur3SourceColor.setColor(android.graphics.Color.BLACK);",
-              "        tabsView.setBackgroundColor(android.graphics.Color.BLACK);",
-              "        fadeView = new View(context);",
-              "        fadeView.setVisibility(View.GONE);",
-              "        contentView.addView(fadeView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 0, Gravity.BOTTOM));",
-          ])
-          data = data[:start] + flat_background + data[end:]
-          main_tabs.write_text(data)
-
-          # Match the requested monochrome icon and label states.
-          palette = root / "TMessagesProj/src/main/assets/darkblue.attheme"
-          palette_lines = palette.read_text().splitlines()
-          tab_colors = {
-              "glass_tabUnselected": "-7829368",
-              "glass_tabSelected": "-1",
-              "glass_tabSelectedText": "-1",
-          }
-          for key, value in tab_colors.items():
-              matches = [i for i, line in enumerate(palette_lines) if line.startswith(key + "=")]
-              if len(matches) > 1:
-                  raise SystemExit(f"Duplicate navigation theme color: {key}")
-              if matches:
-                  palette_lines[matches[0]] = key + "=" + value
-              else:
-                  palette_lines.append(key + "=" + value)
-          palette.write_text("\n".join(palette_lines) + "\n")
-
-          print("Applied flat two-entry navigation: Chats and Settings")
-          print("Hidden Contacts, Calls, and Profile bottom tabs without removing their in-app features")
-          print("Removed glass/blur/pill bottom bar background; set opaque pure black")
-          print("Set selected tab icon/text to white and unselected icon/text to gray")
+          # Remove low-value Help actions from Settings; keep the Privacy Policy entry.
+          settings_activity = root / "TMessagesProj/src/main/java/org/telegram/ui/SettingsActivity.java"
+          data = settings_activity.read_text()
+          help_items = """        items.add(UItem.asHeader(getString(R.string.SettingsHelp)));
+                  items.add(SettingCell.Factory.of(17, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_ask, getString(R.string.AskAQuestion)));
+                  items.add(SettingCell.Factory.of(18, IconBackgroundColors.BLUE_LIGHT.top, IconBackgroundColors.BLUE_LIGHT.bottom, R.drawable.settings_faq, getString(R.string.TelegramFAQ)));
+                  items.add(SettingCell.Factory.of(23, IconBackgroundColors.PURPLE.top, IconBackgroundColors.PURPLE.bottom, R.drawable.settings_features, getString(R.string.TelegramFeatures)));
+          """
+          if data.count(help_items) != 1:
+              raise SystemExit("Could not uniquely locate Settings Help section")
+          data = data.replace(help_items, "", 1)
+          settings_activity.write_text(data)
+          print("Removed Ask a Question, Telegram FAQ, and Telegram Features from Settings")
+          print("Kept the Privacy Policy entry")
 
           # Remove the sponsored/proxy promo dialog from the main chat list.
           # Keep official PSA announcements visible.
